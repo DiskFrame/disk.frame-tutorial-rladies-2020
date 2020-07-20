@@ -1,0 +1,410 @@
+---
+title: "Tutorial Part 2 Quick Start: Basic Operations with nycflights13"
+author: "ZJ"
+date: "7/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+	eval = TRUE,
+	message = FALSE,
+	collapse = TRUE,
+	comment = "#>",
+	include = TRUE)
+```
+
+```{r library, include = FALSE}
+library(disk.frame)
+
+# you need to run this for multi-worker support
+setup_disk.frame()
+```
+
+## Quick Start - replicating dplyr's tutorial on nycflight13 
+
+In this section, I will demonstrate how to use `{dplyr}` verbs with `{disk.frame}`. This replicate the [sparklyr data manipulation tutorial](https://spark.rstudio.com/dplyr/).
+
+
+## Set-up `disk.frame`
+
+`disk.frame` works best if it can process multiple data chunks in parallel. The best way to set-up `disk.frame` so that each CPU core runs a background worker is by using
+
+```r
+setup_disk.frame()
+```
+
+The `setup_disk.frame()` sets up background workers equal to the number of CPU cores; please note that, by default, hyper-threaded cores are counted as one not two.
+
+Alternatively, one may specify the number of workers using `setup_disk.frame(workers = n)`.
+
+## Basic Data Operations with `disk.frame`
+
+The `disk.frame` package provides convenient functions to convert `data.frame`s and CSVs to `disk.frame`s.
+
+### Creating a `disk.frame` from `data.frame`
+We convert a `data.frame` to `disk.frame` using the `as.data.frame` function.
+
+```{r asdiskframe}
+library(nycflights13)
+library(dplyr)
+library(disk.frame)
+library(data.table)
+
+# convert the flights data to a disk.frame and store the disk.frame in the folder
+# "tmp_flights" and overwrite any content if needed
+
+output_path = file.path(tempdir(), "tmp_flights.df")
+
+flights.df <- as.disk.frame(
+  flights, 
+  outdir = output_path,
+  overwrite = TRUE)
+
+flights.df
+```
+
+You should now see a folder called `tmp_flights` with some files in it, namely `1.fst`, `2.fst`.... where each `fst` files is one chunk of the `disk.frame`.
+
+### How to think about a {disk.frame}?
+
+It's useful to think of a _disk.frame_ as just a _data.frame_, i.e. it's one 2D table. In fact, I've strived to make disk.frame compatible with data.frame manipulation syntax. However, it's also good to understand how a {disk.frame} really works.
+
+### The anatomy of a {disk.frame} "file"
+
+A {disk.frame} "file" is a directory of files. Let's look at the content of the "file"
+
+
+```{r dependson=asdiskframe}
+dir(output_path)
+```
+
+Do you all know about [`fst`](https://www.fstpackage.org/)? You should! See [slides from useR! 2019](https://www.beautiful.ai/-LgwO_sf5qrBouC0H0sG/9).
+
+There are 6 `fst` files. You can write these `fst` files using normal `fst` code.
+
+```{r}
+fst::read_fst(file.path(output_path, "1.fst"))
+```
+
+Each file is called a **chunk**. {disk.frame} tries to work with MULTIPLE chunks in parallel. This is one of two "secrets" to {disk.frame}'s speed.
+
+
+### Creating a `disk.frame` from CSV
+
+One of the most common ways to ingest data is via CSV. {disk.frame} provides a way to read CSV using `csv_to_disk.frame`. In a later part of the tutorial I will talk about ingesting data in more depth.
+
+```{r}
+library(nycflights13)
+# write a csv
+csv_path = file.path(tempdir(), "tmp_flights.csv")
+data.table::fwrite(flights, csv_path)
+
+# load the csv into a disk.frame
+df_path = file.path(tempdir(), "tmp_flights.df")
+flights.df <- csv_to_disk.frame(
+  csv_path, 
+  outdir = df_path,
+  overwrite = T)
+  
+flights.df
+```
+
+If the CSV is too large to read in, then we can also use the `in_chunk_size` option to control how many rows to read in at once. For example to read in the data 100,000 rows at a time.
+
+```{r}
+library(nycflights13)
+library(disk.frame)
+
+# write a csv
+csv_path = file.path(tempdir(), "tmp_flights.csv")
+
+data.table::fwrite(flights, csv_path)
+
+df_path = file.path(tempdir(), "tmp_flights.df")
+
+flights.df <- csv_to_disk.frame(
+  csv_path, 
+  outdir = df_path, 
+  in_chunk_size = 100000)
+  
+flights.df
+```
+
+`disk.frame` also has a function `zip_to_disk.frame` that can convert every CSV in a zip file to `disk.frame`s.
+
+### Simple `dplyr` verbs and lazy evaluation
+
+
+One can chain `dplyr` verbs together like with a `data.frame`
+
+```{r}
+c4 <- flights.df %>%
+  srckeep(c("month", "day", "carrier", "dep_delay", "air_time", "distance")) %>% 
+  filter(month == 5, day == 17, carrier %in% c('UA', 'WN', 'AA', 'DL')) %>%
+  select(carrier, dep_delay, air_time, distance) %>%
+  mutate(air_time_hours = air_time / 60) %>%
+  collect %>% # collect the data into memory
+  arrange(carrier)# arrange should occur after `collect`
+
+c4  %>% head
+```
+The class of `flights.df1` is also a `disk.frame` after the   `dplyr::select` transformation. Also, `disk.frame` operations are by default (and where possible) **lazy**, meaning it doesn't perform the operations right away. Instead, it waits until you call `collect`. Exceptions to this rule are the `*_join` operations which evaluated *eagerly* under certain conditions see **Joins for disk.frame in-depth** for details.
+
+For lazily constructed `disk.frame`s (e.g. `flights.df1`). The function `collect` can be used to bring the results from disk into R, e.g.
+
+```{r}
+flights.df %>% 
+  collect %>% 
+  class
+```
+
+Of course, for larger-than-RAM datasets, one wouldn't call `collect` on the whole `disk.frame` (because why would you need `disk.frame` otherwise). More likely, one would call `collect` on a `filter`ed dataset or one summarized with `group_by`.
+
+### List of supported `dplyr` verbs
+
+```r
+select
+rename
+filter
+chunk_arrange # within each chunk
+chunk_group_by # within each chunk
+chunk_summarize # within each chunk
+group_by # limited functions
+summarize # limited functions
+mutate
+transmute
+left_join
+inner_join
+full_join # careful. Performance!
+semi_join
+anit_join
+```
+
+## Sharding and distribution of chunks
+
+Like other distributed data manipulation frameworks `disk.frame` utilizes the *sharding* concept to distribute the data into chunks. For example "to shard by `cust_id`" means that all rows with the same `cust_id` will be stored in the same chunk. This enables `chunk_group_by` by `cust_id` to produce the same results as non-chunked data.
+
+The `by` variables that were used to shard the dataset are called the `shardkey`s. The *sharding* is performed by computing a deterministic hash on the shard keys (the `by` variables) for each row. The hash function produces an integer between `1` and `n`, where `n` is the number of chunks. 
+
+## Group-by
+
+`{disk.frame}` implements the `group_by` operation some caveats. In the `{disk.frame}` framework, only a set functions are supported in `summarize`. However, the user can create more custom `group-by` functions can be defined.
+
+```{r}
+system.time(
+  flights.df %>%
+    group_by(carrier) %>% # notice that hard_group_by needs to be set
+    summarize(count = n(), mean_dep_delay = mean(dep_delay, na.rm=T)) %>%  # mean follows normal R rules
+    collect %>% 
+    arrange(carrier)
+)
+```
+
+## Restrict input columns for faster processing
+
+One can restrict which input columns to load into memory for each chunk; this can significantly increase the speed of data processing. To restrict the input columns, use the `srckeep` function which only accepts column names as a string vector.
+
+```{r}
+system.time(
+  flights.df %>%
+    srckeep(c("carrier","dep_delay")) %>%
+    group_by(carrier) %>% 
+    summarize(count = n(), mean_dep_delay = mean(dep_delay, na.rm=T)) %>%  # mean follows normal R rules
+    collect
+)
+```
+
+Input column restriction is one of the most critical efficiencies provided by `disk.frame`. Because the underlying format allows random access to columns (i.e. retrieve only the columns used for processing), hence one can drastically reduce the amount of data loaded into RAM for processing by keeping only those columns that are directly used to produce the results.
+
+## Joins
+
+`disk.frame` supports many dplyr joins including:
+
+```r
+left_join
+inner_join
+semi_join
+inner_join
+full_join # requires hard_group_by on both left and right
+```
+In all cases, the left dataset (`x`) must be a `disk.frame`, and the right dataset (`y`) can be either a `disk.frame` or a `data.frame`. If the right dataset is a `disk.frame` and the `shardkey`s are different between the two `disk.frame`s then two expensive `hard` `group_by` operations are performed *eagerly*, one on the left `disk.frame` and one on the right `disk.frame` to perform the joins correctly. 
+
+However, if the right dataset is a `data.frame` then `hard_group_by`s are only performed in the case of `full_join`.
+
+Note `disk.frame` does not support `right_join` the user should use `left_join` instead.
+
+The below joins are performed *lazily* because `airlines.dt` is a `data.table` not a `disk.frame`:
+
+```{r airlines_dt, cache=TRUE}
+# make airlines a data.table
+airlines.dt <- data.table(airlines)
+
+# perform a left join
+flights.df %>% 
+  left_join(airlines.dt, by ="carrier") %>% 
+  collect %>% 
+  arrange(year, month, day, dep_time, sched_dep_time)
+```
+
+```{r, dependson='airlines_dt'}
+# convert the data to disk.frame
+airlines.df = as.disk.frame(airlines.dt)
+
+flights.df %>% 
+  left_join(airlines.df, by = c("carrier")) %>% 
+  collect %>% 
+  arrange(year, month, day, dep_time, sched_dep_time)
+```
+
+## Window functions and arbitrary functions
+
+### It's hard to do group-by in chunks
+
+The data is stored in chunks. How to handle `diskf %>% group_by(grp) %>% summarize(meanx = mean(x))`? I would need to "coordinate" the computation of all the chunks. I will discussed in more depth in the group-by section of the tutorial.
+
+For now, understand that because of the chunk structure, not all `summarize` functions are supported at this stage. This is the list of `summarize` function currently supported by `disk.frame`
+
+| Function     | Exact/Estimate | Notes                                      |
+|--------------|----------------|--------------------------------------------|
+| `min`        | Exact          |                                            |
+| `max`        | Exact          |                                            |
+| `mean`       | Exact          |                                            |
+| `sum`        | Exact          |                                            |
+| `length`     | Exact          |                                            |
+| `n`          | Exact          |                                            |
+| `n_distinct` | Exact          |                                            |
+| `sd`         | Exact          |                                            |
+| `var`        | Exact          | `var(x)` only `cor, cov` support *planned* |
+| `any`        | Exact          |                                            |
+| `all`        | Exact          |                                            |
+| `median`     | Estimate       |                                            |
+| `quantile`   | Estimate       | One quantile only                          |
+| `IQR`        | Estimate       |                                            |
+
+
+
+### `hard_group_by` and `chunk_group_by`
+
+For tasks not achievable with group-by. We provide two other functions
+
+`hard_group_by` - the same as group-by but organizes the chunks - VERY EXPENSIVE
+`chunk_group_by` - performances the group-by within chunks. Friends with `chunk_summarize`
+
+
+### Some examples
+
+`{disk.frame}` supports all `data.frame` operations, unlike Spark which can only perform those operations that Spark has implemented. Hence windowing functions like `min_rank` and `rank` are supported out of the box. 
+
+For the following example, we will use the `hard_group_by` which performs a group-by and also re-organizes the chunks so that all records with the same `year`, `month`, and `day` end up in the same chunk. This is typically not advised, as `hard_group_by` can be slow for large datasets.
+
+```{r}
+# Find the most and least delayed flight each day
+bestworst <- flights.df %>%
+   srckeep(c("year","month","day", "dep_delay")) %>%
+   hard_group_by(c("year", "month", "day")) %>%
+   filter(dep_delay == min(dep_delay, na.rm = T) || dep_delay == max(dep_delay, na.rm = T)) %>%
+   collect
+   
+bestworst %>% head
+```
+
+another example
+
+```{r}
+ranked <- flights.df %>%
+  srckeep(c("year","month","day", "dep_delay")) %>%
+  hard_group_by(c("year", "month", "day")) %>%
+  filter(min_rank(desc(dep_delay)) <= 2 & dep_delay > 0) %>%
+  collect
+
+ranked %>% head
+```
+
+one more example
+
+```{r}
+# Rank each flight within a daily
+ranked <- flights.df %>%
+  srckeep(c("year","month","day", "dep_delay")) %>%
+  group_by(year, month, day) %>%
+  mutate(rank = rank(desc(dep_delay))) %>%
+  collect
+
+ranked %>% head
+```
+
+
+```{r}
+# Rank each flight within a daily
+ranked <- flights %>%
+  select(c("year","month","day", "dep_delay")) %>%
+  group_by(year, month, day) %>%
+  mutate(rank = rank(desc(dep_delay))) %>%
+  collect
+
+ranked %>% head
+```
+
+
+```{r}
+# Rank each flight within a daily
+ranked <- flights.df %>%
+  srckeep(c("year","month","day", "dep_delay")) %>%
+  chunk_group_by(year, month, day) %>%
+  mutate(rank = rank(desc(dep_delay))) %>%
+  collect
+
+ranked %>% head
+```
+
+
+## Arbitrary by-chunk processing
+
+One can apply arbitrary transformations to each chunk of the `disk.frame` by using the `delayed` function which evaluates lazily or the `map.disk.frame(lazy = F)` function which evaluates eagerly. For example to return the number of rows in each chunk
+
+```{r}
+flights.df1 <- delayed(flights.df, ~nrow(.x))
+collect_list(flights.df1) %>% head # returns number of rows for each data.frame in a list
+```
+and to do the same with `map.disk.frame`
+
+```{r}
+map(flights.df, ~nrow(.x), lazy = F) %>% head
+```
+The `map` function can also output the results to another disk.frame folder, e.g.
+
+```{r}
+# return the first 10 rows of each chunk
+flights.df2 <- map(flights.df, ~.x[1:10,], lazy = F, outdir = file.path(tempdir(), "tmp2"), overwrite = T)
+
+flights.df2 %>% head
+```
+
+Notice `{disk.frame}` supports the `purrr` syntax for defining a function using `~`.
+
+## Sampling
+
+In the `disk.frame` framework, sampling a proportion of rows within each chunk can be performed using `sample_frac`. 
+
+```{r}
+flights.df %>% sample_frac(0.01) %>% collect %>% head
+```
+
+## Writing Data
+
+One can output a `disk.frame` by using the `write_disk.frame` function. E.g.
+
+```r
+write_disk.frame(flights.df, outdir="out")
+```
+this will output a disk.frame to the folder "out"
+
+```{r cleanup, include=FALSE}
+fs::dir_delete(file.path(tempdir(), "tmp_flights.df"))
+fs::dir_delete(file.path(tempdir(), "tmp2"))
+fs::file_delete(file.path(tempdir(), "tmp_flights.csv"))
+```
+
+We will expand on this in the next section.

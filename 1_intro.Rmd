@@ -1,0 +1,47 @@
+---
+title: "Untitled"
+author: "ZJ"
+date: "7/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## What is {disk.frame}
+
+Let us go through the common questions on https://diskframe.com
+
+
+
+## What you need to get started - Setting up
+
+### Installation
+
+Simply run
+
+```r
+install.packages("disk.frame")
+
+# install the dataset package we will use in today's tutorial
+install.packages("nycflights13")
+```
+
+### Recommended boilerplate
+
+Running `setup_disk.frame()` immediately after `library(disk.frame)` is highly recommended. It starts up multiple R sessions and `{disk.frame}` will use those R sessions to parallel the workloads.
+
+```
+# this willl set disk.frame with multiple workers
+setup_disk.frame()
+```
+
+*Note* by default it still start as many session as there are cores. So only servers with many many cores, this may not be a good idea. Hence you may control the number of sessions by setting `workers=`.
+
+```
+# this willl set disk.frame with multiple workers
+setup_disk.frame(workers = 4) # set up 4 session
+```
+
+
