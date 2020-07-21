@@ -262,9 +262,17 @@ flights.df %>%
 
 ### It's hard to do group-by in chunks
 
-The data is stored in chunks. How to handle `diskf %>% group_by(grp) %>% summarize(meanx = mean(x))`? I would need to "coordinate" the computation of all the chunks. I will discussed in more depth in the group-by section of the tutorial.
+The data is stored in chunks. How to handle the below?
 
-For now, understand that because of the chunk structure, not all `summarize` functions are supported at this stage. This is the list of `summarize` function currently supported by `disk.frame`
+```r
+diskf %>% 
+  group_by(grp) %>% 
+  summarize(meanx = mean(x))
+```
+
+I would need to "coordinate" the computation of all the chunks. I will discussed in more depth in the group-by section of the tutorial.
+
+For now, understand that because of the chunk structure, not all `summarize` functions are supported at this stage. This is the list of `summarize` function currently supported by `{disk.frame}`
 
 | Function     | Exact/Estimate | Notes                                      |
 |--------------|----------------|--------------------------------------------|

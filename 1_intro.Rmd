@@ -11,9 +11,28 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## What is {disk.frame}
 
+Let's look at the [useR! 2019 presentation](https://www.beautiful.ai/-LgwO_sf5qrBouC0H0sG/1)
+
 Let us go through the common questions on https://diskframe.com
 
+## Back up overall flow
+* generate a fake dataset that is reasonably large (so avoiding a large download from internet)
+* Convert the dataset to CSV
+* Show how to load the data from CSV to {disk.frame}
+* Manipulate the {disk.frame}
+* Do group-by and summary statistics with {disk.frame}
+* show how dplyr and data.table syntax can operate on {disk.frame}
+* Explain how to perform group-by efficiently 
+* Demonstrate how joining works for large {disk.frame}s
 
+**** break ****
+
+After the break, we will cover advanced {disk.frame} topics
+
+* Explain how to extend {disk.frame} with a custom function
+* Explain how to tune {disk.frame} for maximum efficiency
+* Show some convenience features for {disk.frame} in RStudio if time permits
+* Conclusion and Q&A
 
 ## What you need to get started - Setting up
 
