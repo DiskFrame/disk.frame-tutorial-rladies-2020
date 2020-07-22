@@ -279,3 +279,34 @@ How `{disk.frame}` is _lazy_ by default (mostly, some joins are _eager_ by defau
 How to use `cmap(..., lazy=FALSE, outdir)` and `write_disk.frame(disf, outdir)` to save a new `disk.frame`
 
 How to save a `lazy` `{disk.frame}` for and load it for re-use 
+
+## Do we still have time?
+
+Want to leave 20 mins for Q&A.
+
+If we still have time we go through, how to define your own one-stage group-by functions
+
+https://diskframe.com/articles/11-custom-group-by.html
+
+
+## Learn more about {disk.frame}?
+
+Go to diskframe.com
+
+Feel free (I really mean it) to ask question on Github.com https://github.com/xiaodaigh/disk.frame
+
+Just submit an issue
+
+![github issues](github-issues.PNG)
+
+## Future plans
+
+1. Bugfixes
+1. A better NSE system
+1. Raise testing code coverage to 100%
+1. Comprehensive documentation
+1. New features
+
+
+
+
