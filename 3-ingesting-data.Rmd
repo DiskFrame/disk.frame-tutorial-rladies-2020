@@ -107,17 +107,16 @@ dbFetch(res)
 ```
 
 ```{r}
-db_to_disk.frame <- function(con, tbl, ..., chunksize = 1e6) {
+db_to_disk.frame <- function(con, tbl, ..., chunksize = 1e6, verbose = FALSE) {
   suppressWarnings(
     row_count <- DBI::dbSendQuery(con, glue::glue("SELECT count(*) from {tbl}")) %>% DBI::dbFetch()
   )
   row_count = row_count[[1]]
   
-  offsets = seq.int(0, max(0, row_count-chunksize+1), length.out=ceiling(row_count/chunksize))
-  offsets = as.integer(ceiling(offsets)) %>% unique
-  
+  offsets = seq.int(0, row_count, by=chunksize)
+
   suppressWarnings(
-    res <- dbSendQuery(con, glue::glue("SELECT * FROM {tbl} LIMIT {as.integer(chunksize)} OFFSET 0"))
+    res <- dbSendQuery(con, glue::glue("SELECT * FROM {tbl} ORDER BY ROW_NUMBER() over () LIMIT {as.integer(chunksize)} OFFSET 0"))
   )
   
   suppressWarnings(res <- dbFetch(res))
@@ -125,10 +124,17 @@ db_to_disk.frame <- function(con, tbl, ..., chunksize = 1e6) {
   df_out = as.disk.frame(res, ...)
   
   purrr::walk(offsets[-1], function(offset) {
-    suppressWarnings(
-      res <- dbSendQuery(con, glue::glue("SELECT * FROM {tbl} LIMIT {as.integer(chunksize)} OFFSET 0"))
-    )
-    add_chunk(df_out, res %>% dbFetch())
+    sql_statement = glue::glue("SELECT * FROM {tbl} ORDER BY ROW_NUMBER() over () LIMIT {as.integer(chunksize)} OFFSET {offset}")
+    if(verbose) {
+        print(sql_statement)
+    }
+    suppressWarnings({res <- dbSendQuery(con, sql_statement)})
+
+    tmp_df = res %>% dbFetch()
+    if (verbose) {
+      print(glue::glue("number of rows retrieved {nrow(tmp_df)}"))
+    }
+    add_chunk(df_out, tmp_df)
   })
   
   df_out
@@ -141,13 +147,9 @@ flight_from_sqlite.df
 head(flight_from_sqlite.df)
 ```
 
-But why stream to {disk.frame} when you already have a DBMS? Good question.
+But why "stream" to `{disk.frame}` when you already have a DBMS? Good question.
 
 In many case you don't have to! In fact, I recommend using a DBMS if you are lucky to have one set up at work.
 
 However, I am just showing the general technique of using `add_chunk` and how you can be creative. Also, having data in `disk.frame` means that now you have **almost** the entire R ecosystem of function open to you.
-
-
-
-
 
