@@ -1,7 +1,7 @@
 ---
 title: "3 Ingesting data"
 author: "ZJ"
-date: "7/20/2020"
+date: "2020-07-20"
 output: html_document
 ---
 
@@ -44,16 +44,23 @@ flights.df
 ```{r}
 head(flights.df)
 ```
-### {disk.frame} read CSV logic
+### `{disk.frame}` read CSV logic
 
-{disk.frame} has multiple CSV backends: {data.table}, {readr}, {LaF}, {bigreader} . It uses some rather complicated logic to determine which backend to use. In general, it prefers data.table and roughly follows this logic
+`{disk.frame}` has multiple CSV backends: `{data.table}`, `{readr}`, and `{LaF}`. It uses some rather complicated logic to determine which backend to use. In general, it prefers `{data.table}` and roughly follows this logic
 
-* If {disk.frame} deems your CSV to be small enough to fit in RAM it will use data.table's `fread`
-* If the file is too large, it will use {bigreadr} to SPLIT the file into smaller files and then read the smaller files simultaneously. In practice this was found to be the fastest approach.
+* If `{disk.frame}` deems your CSV to be small enough to fit in RAM it will use data.table's `fread`
+* If the file is too large, it will use `{bigreadr}` to SPLIT the file into smaller files and then read the smaller files simultaneously. In practice this was found to be the fastest approach.
 
 How to invoke the different back-ends?
 
+```r
+csv_to_disk.frame(..., backend = c("data.table", "readr", "LaF"))
+
 ```
+
+Lear more:
+
+```r
 ?csv_to_disk.frame
 ```
 
@@ -77,7 +84,6 @@ flights_doubled.df
 ```
 
 **Discussion: What are some dangers to watch out for when reading multiple CSVs?**
-
 
 
 
@@ -143,6 +149,8 @@ db_to_disk.frame <- function(con, tbl, ..., chunksize = 1e6, verbose = FALSE) {
 flight_from_sqlite.df = db_to_disk.frame(con, "flights", chunksize = 50000)
 flight_from_sqlite.df
 ```
+
+
 ```{r}
 head(flight_from_sqlite.df)
 ```

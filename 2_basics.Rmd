@@ -1,7 +1,7 @@
 ---
 title: "Tutorial Part 2 Quick Start: Basic Operations with nycflights13"
 author: "ZJ"
-date: "7/20/2020"
+date: "2020-07-23"
 output: html_document
 ---
 
@@ -41,12 +41,12 @@ Alternatively, one may specify the number of workers using `setup_disk.frame(wor
 
 ## Basic Data Operations with `disk.frame`
 
-The `disk.frame` package provides convenient functions to convert `data.frame`s and CSVs to `disk.frame`s.
+The `{disk.frame}` package provides convenient functions to convert `data.frame`s and CSVs to `disk.frame`s.
 
 ### Creating a `disk.frame` from `data.frame`
 We convert a `data.frame` to `disk.frame` using the `as.data.frame` function.
 
-```{r asdiskframe}
+```{r}
 library(nycflights13)
 library(dplyr)
 library(disk.frame)
@@ -67,16 +67,16 @@ flights.df
 
 You should now see a folder called `tmp_flights` with some files in it, namely `1.fst`, `2.fst`.... where each `fst` files is one chunk of the `disk.frame`.
 
-### How to think about a {disk.frame}?
+### How to think about a `{disk.frame}`?
 
-It's useful to think of a _disk.frame_ as just a _data.frame_, i.e. it's one 2D table. In fact, I've strived to make disk.frame compatible with data.frame manipulation syntax. However, it's also good to understand how a {disk.frame} really works.
+It's useful to think of a _disk.frame_ as just a _data.frame_, i.e. it's a 2D table. In fact, I tried to make `disk.frame` compatible with `data.frame` manipulation syntax. However, it's also good to understand how a `{disk.frame}` really works.
 
 ### The anatomy of a {disk.frame} "file"
 
 A {disk.frame} "file" is a directory of files. Let's look at the content of the "file"
 
 
-```{r dependson=asdiskframe}
+```{r}
 dir(output_path)
 ```
 
@@ -85,11 +85,69 @@ Do you all know about [`fst`](https://www.fstpackage.org/)? You should! See [sli
 There are 6 `fst` files. You can write these `fst` files using normal `fst` code.
 
 ```{r}
-fst::read_fst(file.path(output_path, "1.fst"))
+first_chunk = fst::read_fst(file.path(output_path, "1.fst"))
+
+head(first_chunk)
 ```
 
-Each file is called a **chunk**. {disk.frame} tries to work with MULTIPLE chunks in parallel. This is one of two "secrets" to {disk.frame}'s speed.
+Each file is called a **chunk**. `{disk.frame}` tries to work with MULTIPLE chunks in parallel. This is one of two "secrets" to `{disk.frame}`'s speed.
 
+A lot of operations can be performed in parallel, a few chunks at a time
+
+* `filter`
+* `mutate`
+* certain `group_by` and `summarize` pairs
+
+So `{disk.frame}` does the job of translating `dplyr` verbs (or `cmap` operations; you will learn these later on in the tutorial) into parallel operations for you
+
+```r
+result <- flights.df %>% 
+  filter(year = 2003) %>% 
+  collect
+```
+
+the above will be translated into this many parallel processes
+
+```r
+files = paste0(1:6, ".fst")
+
+list.of.data.frame <- future.apply::future_lapply(files, function(file) {
+  fst::read_fst(file.path(output_path, file))
+})
+
+# row-bind them together
+result <- do.call(rbind, list.of.data.frame)
+
+# or if you prefer data.table
+result <- rbindlist(list.of.data.frame)
+
+# or if you prefer dplyr
+result <- bind_rows(list.of.data.frame)
+
+# or if you prefer purrr
+result <- map_dfr(list.of.data.frame, identity)
+  
+```
+  
+##### How many workers is `{disk.frame}` using? 
+
+
+```r
+future::nbrOfWorkers()
+```
+
+You can customize that with
+
+```r
+setup_disk.frame(workers = nworkers)
+```
+
+`{disk.frame}` uses `{future}` as the parallelization backend, so all options that affect `{future}` will also impact `{disk.frame}`. For examples, this options allows unlimited data to be passed between R sessions.
+
+```r
+# this will allow unlimited amount of data to be passed from worker to worker
+options(future.globals.maxSize = Inf)
+```
 
 ### Creating a `disk.frame` from CSV
 
@@ -127,7 +185,7 @@ df_path = file.path(tempdir(), "tmp_flights.df")
 flights.df <- csv_to_disk.frame(
   csv_path, 
   outdir = df_path, 
-  in_chunk_size = 100000)
+  in_chunk_size = 100000) # the in_chunk_size can typically be omitted, {disk.frame} will "guess-timate" it
   
 flights.df
 ```
@@ -150,14 +208,29 @@ c4 <- flights.df %>%
 
 c4  %>% head
 ```
-The class of `flights.df1` is also a `disk.frame` after the   `dplyr::select` transformation. Also, `disk.frame` operations are by default (and where possible) **lazy**, meaning it doesn't perform the operations right away. Instead, it waits until you call `collect`. Exceptions to this rule are the `*_join` operations which evaluated *eagerly* under certain conditions see **Joins for disk.frame in-depth** for details.
 
-For lazily constructed `disk.frame`s (e.g. `flights.df1`). The function `collect` can be used to bring the results from disk into R, e.g.
+* `disk.frame` operations are **lazy** by default, meaning it doesn't perform the operations right away. 
+* you need to call `collect` for actions to be carried out
+* Exceptions to this rule are the `*_join` operations which are evaluated *eagerly* under certain conditions see **Joins for disk.frame in-depth** for details.
+
+For example, `flights1.df1` is lazy. The function `collect` can be used to bring the results from disk into R, e.g.
 
 ```{r}
-flights.df %>% 
-  collect %>% 
-  class
+system.time(
+  flights1.df <- flights.df %>% 
+    srckeep(c("month", "day", "carrier", "dep_delay", "air_time", "distance")) %>% 
+    filter(month == 5, day == 17, carrier %in% c('UA', 'WN', 'AA', 'DL')) %>%
+    select(carrier, dep_delay, air_time, distance) %>%
+    mutate(air_time_hours = air_time / 60)
+)
+```
+
+```{r}
+system.time(flights1_collected <- collect(flights1.df))
+```
+
+```{r}
+class(flights1_collected)
 ```
 
 Of course, for larger-than-RAM datasets, one wouldn't call `collect` on the whole `disk.frame` (because why would you need `disk.frame` otherwise). More likely, one would call `collect` on a `filter`ed dataset or one summarized with `group_by`.
@@ -181,13 +254,6 @@ full_join # careful. Performance!
 semi_join
 anit_join
 ```
-
-## Sharding and distribution of chunks
-
-Like other distributed data manipulation frameworks `disk.frame` utilizes the *sharding* concept to distribute the data into chunks. For example "to shard by `cust_id`" means that all rows with the same `cust_id` will be stored in the same chunk. This enables `chunk_group_by` by `cust_id` to produce the same results as non-chunked data.
-
-The `by` variables that were used to shard the dataset are called the `shardkey`s. The *sharding* is performed by computing a deterministic hash on the shard keys (the `by` variables) for each row. The hash function produces an integer between `1` and `n`, where `n` is the number of chunks. 
-
 ## Group-by
 
 `{disk.frame}` implements the `group_by` operation some caveats. In the `{disk.frame}` framework, only a set functions are supported in `summarize`. However, the user can create more custom `group-by` functions can be defined.
@@ -252,11 +318,66 @@ flights.df %>%
 # convert the data to disk.frame
 airlines.df = as.disk.frame(airlines.dt)
 
-flights.df %>% 
-  left_join(airlines.df, by = c("carrier")) %>% 
-  collect %>% 
-  arrange(year, month, day, dep_time, sched_dep_time)
+system.time(
+  flights.df %>% 
+    left_join(airlines.df, by = c("carrier")) %>% 
+    collect %>% 
+    arrange(year, month, day, dep_time, sched_dep_time)  
+)
 ```
+
+### How does `merge_by_chunk_id` work?
+
+```r
+disk.frame1 %>% 
+  left_join(disk.frame2, merge_by_chunk_id = FALSE)
+```
+
+![merge_by_chunk_id](merge_by_chunk_id.png)
+
+
+## Sharding and distribution of chunks
+
+How do I make sure that `merge_by_chunk_id` works? Say, if I am merging by `customer_id`. How do I know the same `customer_id` will end up in the same chunk for two different `disk.farme`s?
+
+The answer is sharding. See 
+
+![sharding](shard-by.PNG)
+
+If you shard by particular columns, then all columns with the same values will go to the same chunks.
+
+Two ways to do sharding
+
+```r
+# 1. specify it at read time
+csv_to_disk.frame(path_to_csv,..., shardby = c("col1", "col2"))
+
+# 2. rechunk an existing disk.frame
+rechunk(a.disk.frame, shardby = = c("col1", "col2"))
+```
+
+In our `flights` example, we do
+
+```{r}
+flights.sharded.df = shard(flights.df, shardby = c("carrier"))
+airlines.sharded.df = shard(airlines.df, shardby = c("carrier"))
+
+system.time(
+  left_join_result2 <- flights.df %>% 
+    left_join(airlines.df, by = c("carrier"), merge_by_chunk_id = TRUE) %>% 
+    collect %>% 
+    arrange(year, month, day, dep_time, sched_dep_time)
+)
+
+left_join_result2
+```
+
+Like other distributed data manipulation frameworks `disk.frame` utilizes the *sharding* concept to distribute the data into chunks. For example "to shard by `cust_id`" means that all rows with the same `cust_id` will be stored in the same chunk. This enables `chunk_group_by` by `cust_id` to produce the same results as non-chunked data.
+
+The `by` variables that were used to shard the dataset are called the `shardkey`s. The *sharding* is performed by computing a deterministic hash on the shard keys (the `by` variables) for each row. The hash function produces an integer between `1` and `n`, where `n` is the number of chunks. 
+
+If you plan to use `shard` or required certain rows to be in the same chunk (e.g. some group-by operations), it is adviced that plan ahead!
+
 
 ## Window functions and arbitrary functions
 
@@ -297,11 +418,13 @@ For now, understand that because of the chunk structure, not all `summarize` fun
 
 For tasks not achievable with group-by. We provide two other functions
 
-`hard_group_by` - the same as group-by but organizes the chunks - VERY EXPENSIVE
+`hard_group_by` - the same as group-by but re-organizes the chunks on disk by sharding them by the group-by columns - VERY EXPENSIVE
 `chunk_group_by` - performances the group-by within chunks. Friends with `chunk_summarize`
 
+We won't discuss these in depth in this tutorial.
 
-### Some examples
+
+#### Some examples
 
 `{disk.frame}` supports all `data.frame` operations, unlike Spark which can only perform those operations that Spark has implemented. Hence windowing functions like `min_rank` and `rank` are supported out of the box. 
 
@@ -370,18 +493,19 @@ ranked %>% head
 
 ## Arbitrary by-chunk processing
 
-One can apply arbitrary transformations to each chunk of the `disk.frame` by using the `delayed` function which evaluates lazily or the `map.disk.frame(lazy = F)` function which evaluates eagerly. For example to return the number of rows in each chunk
+One can apply arbitrary transformations to each chunk of the `disk.frame` by using the `delayed` function which evaluates lazily or the `cmap(lazy = F)` function which evaluates eagerly. For example to return the number of rows in each chunk
 
 ```{r}
 flights.df1 <- delayed(flights.df, ~nrow(.x))
 collect_list(flights.df1) %>% head # returns number of rows for each data.frame in a list
 ```
-and to do the same with `map.disk.frame`
+and to do the same with `cmap`
 
 ```{r}
-map(flights.df, ~nrow(.x), lazy = F) %>% head
+cmap(flights.df, ~nrow(.x), lazy = F) %>% head
 ```
-The `map` function can also output the results to another disk.frame folder, e.g.
+
+The `cmap` function can also output the results to another `disk.frame` folder, e.g.
 
 ```{r}
 # return the first 10 rows of each chunk
@@ -416,3 +540,13 @@ fs::file_delete(file.path(tempdir(), "tmp_flights.csv"))
 ```
 
 We will expand on this in the next section.
+
+
+## What's covered in this section?
+
+* Many `dplyr` verbs are implemented for data manipulation
+* `XYZ_join` are implemented. For performances, the right table to be data.frame, or shard both the left and right `disk.frame`s
+* The concept of _sharding_
+* Group-by and summarization are possible for many operations
+* `sample_frac` for sampling a fraction of each chunk
+* `write_disk.frame` for writing out new `disk.frame`s

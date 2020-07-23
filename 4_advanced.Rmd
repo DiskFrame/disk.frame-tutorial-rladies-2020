@@ -1,7 +1,7 @@
 ---
 title: "4 Beyond Basics - `group_by` and `cmap/delayed`"
 author: "ZJ"
-date: "7/20/2020"
+date: "2020-07-23"
 output: html_document
 ---
 
@@ -46,13 +46,15 @@ system.time(
 ```
 Computation only happens when you call `collect`. This should take about 1~2 mins
 
-```{r}
+```{r, cache=TRUE}
 system.time(
   grp.df <- collect(grp.df)
 )
 grp.df
 ```
+
 ![all CPU cores being used](all-cpu-cores.PNG)
+
 
 **IMPORTANT!**
 
@@ -183,7 +185,7 @@ The above examples shows how to perform data manipulation and then bring the res
 
 Often, we want to take a `disk.frame`, apply some transformation on it and store it as another `disk.frame`.
 
-You can do that with `map` and `write_disk.frame`. E.g.
+You can do that with `cmap` and `write_disk.frame`. E.g.
 
 ```{r}
 library(purrr)
@@ -220,7 +222,7 @@ flights_w_flight_date.dplyr.cmap.df %>%
 
 ```{r}
 flights_w_flight_date.df %>% 
-  write_disk.frame(outdir = "some_model.df")
+  write_disk.frame(outdir = "some_model.df", overwrite = TRUE)
 ```
 
 You can simply save the lazy `disk.frame` and re-use.
@@ -284,9 +286,11 @@ How to save a `lazy` `{disk.frame}` for and load it for re-use
 
 Want to leave 20 mins for Q&A.
 
-If we still have time we go through, how to define your own one-stage group-by functions
-
-https://diskframe.com/articles/11-custom-group-by.html
+If we still have time we go through, 
+* [data.table syntax](https://diskframe.com/articles/05-data-table-syntax.html)
+* [running logistic regression using `{disk.frame}`](https://diskframe.com/articles/07-glm.html)
+* [some convenience features ](https://diskframe.com/articles/09-convenience-features.html)
+* [how to define your own one-stage group-by functions](https://diskframe.com/articles/11-custom-group-by.html)
 
 
 ## Learn more about {disk.frame}?
@@ -306,7 +310,3 @@ Just submit an issue
 1. Raise testing code coverage to 100%
 1. Comprehensive documentation
 1. New features
-
-
-
-
