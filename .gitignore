@@ -44,3 +44,8 @@ test2.Rmd
 
 
 some_location.df/
+*.rds
+*.fst
+*.csv
+*.qs
+*.file
