@@ -6,3 +6,4 @@ This is the [`{disk.frame}`](https://diskframe.com) for RLadies San Diego 2020. 
 
 * [diskframe.com website](https://diskframe.com)
 * [Slides from useR! 2019](https://www.beautiful.ai/-LgwO_sf5qrBouC0H0sG/1)
+* [disk.frame Github ](https://github.com/xiaodaigh/disk.frame)
