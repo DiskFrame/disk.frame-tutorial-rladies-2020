@@ -1,5 +1,5 @@
 ---
-title: "Introduction to {disk.frame} Tutorial"
+title: "1 - Introduction to {disk.frame} Tutorial"
 author: "ZJ"
 date: "2020-07-23"
 output: html_document
@@ -21,7 +21,7 @@ Let us go through the common questions on https://diskframe.com
 
 Simply run
 
-```r
+```{r}
 install.packages("disk.frame")
 
 # install the dataset package we will use in today's tutorial

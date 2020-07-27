@@ -1,5 +1,5 @@
 ---
-title: "Tutorial Part 2 Quick Start: Basic Operations with nycflights13"
+title: "2 - Quick Start: Basic Operations with nycflights13"
 author: "ZJ"
 date: "2020-07-23"
 output: html_document
@@ -46,7 +46,7 @@ The `{disk.frame}` package provides convenient functions to convert `data.frame`
 ### Creating a `disk.frame` from `data.frame`
 We convert a `data.frame` to `disk.frame` using the `as.data.frame` function.
 
-```{r}
+```{r echo=TRUE}
 library(nycflights13)
 library(dplyr)
 library(disk.frame)
@@ -58,7 +58,7 @@ library(data.table)
 output_path = file.path(tempdir(), "tmp_flights.df")
 
 flights.df <- as.disk.frame(
-  flights, 
+  nycflights13::flights, 
   outdir = output_path,
   overwrite = TRUE)
 
@@ -87,6 +87,8 @@ There are 6 `fst` files. You can write these `fst` files using normal `fst` code
 ```{r}
 first_chunk = fst::read_fst(file.path(output_path, "1.fst"))
 
+print(class(first_chunk))
+
 head(first_chunk)
 ```
 
@@ -102,7 +104,7 @@ So `{disk.frame}` does the job of translating `dplyr` verbs (or `cmap` operation
 
 ```r
 result <- flights.df %>% 
-  filter(year = 2003) %>% 
+  filter(year == 2003) %>% 
   collect
 ```
 
@@ -112,7 +114,8 @@ the above will be translated into this many parallel processes
 files = paste0(1:6, ".fst")
 
 list.of.data.frame <- future.apply::future_lapply(files, function(file) {
-  fst::read_fst(file.path(output_path, file))
+  fst::read_fst(file.path(output_path, file)) %>% 
+    filter(year == 2003)
 })
 
 # row-bind them together
@@ -155,12 +158,14 @@ One of the most common ways to ingest data is via CSV. {disk.frame} provides a w
 
 ```{r}
 library(nycflights13)
+
 # write a csv
 csv_path = file.path(tempdir(), "tmp_flights.csv")
 data.table::fwrite(flights, csv_path)
 
 # load the csv into a disk.frame
 df_path = file.path(tempdir(), "tmp_flights.df")
+
 flights.df <- csv_to_disk.frame(
   csv_path, 
   outdir = df_path,
@@ -241,6 +246,7 @@ Of course, for larger-than-RAM datasets, one wouldn't call `collect` on the whol
 select
 rename
 filter
+arrange # sorts the 
 chunk_arrange # within each chunk
 chunk_group_by # within each chunk
 chunk_summarize # within each chunk
@@ -359,8 +365,8 @@ rechunk(a.disk.frame, shardby = = c("col1", "col2"))
 In our `flights` example, we do
 
 ```{r}
-flights.sharded.df = shard(flights.df, shardby = c("carrier"))
-airlines.sharded.df = shard(airlines.df, shardby = c("carrier"))
+flights.sharded.df = shard(flights.df, shardby = c("carrier"), nchunks = 6)
+airlines.sharded.df = shard(airlines.df, shardby = c("carrier"), nchunks = 6)
 
 system.time(
   left_join_result2 <- flights.df %>% 
@@ -509,7 +515,7 @@ The `cmap` function can also output the results to another `disk.frame` folder, 
 
 ```{r}
 # return the first 10 rows of each chunk
-flights.df2 <- map(flights.df, ~.x[1:10,], lazy = F, outdir = file.path(tempdir(), "tmp2"), overwrite = T)
+flights.df2 <- cmap(flights.df, ~.x[1:10,], lazy = F, outdir = file.path(tempdir(), "tmp2"), overwrite = T)
 
 flights.df2 %>% head
 ```
@@ -529,7 +535,7 @@ flights.df %>% sample_frac(0.01) %>% collect %>% head
 One can output a `disk.frame` by using the `write_disk.frame` function. E.g.
 
 ```r
-write_disk.frame(flights.df, outdir="out")
+write_disk.frame(flights.df %>% filter(xxxx), outdir="out")
 ```
 this will output a disk.frame to the folder "out"
 

@@ -1,5 +1,5 @@
 ---
-title: "4 Beyond Basics - `group_by` and `cmap/delayed`"
+title: "4 Beyond Basics - `group_by` and `cmap`"
 author: "ZJ"
 date: "2020-07-23"
 output: html_document
@@ -17,6 +17,14 @@ We will show how to actually use `{disk.frame}`!
 
 Performing group-by on large datasets is key use-case for `{disk.frame}`.
 
+a.disk.fzrame %>% 
+  cmap(~{
+    xx = covert_to_xgboost_format(.x)
+    xgboost(xx, gpu=TRUE)
+  })
+
+a %>% 
+  srckeep(c("a"))
 
 You will not be able to run on your computer as the data sits on mine. It's from the Fannie Mae dataset. I have concatenated all the Performance data into one 1.8 billion row dataset
 ```{r}
@@ -261,14 +269,14 @@ x = 100
 flights_w_flight_date.lazy.df <-  flight.df %>% 
   mutate(dep_time = dep_time + x)
 
-flights_w_flight_date.lazy.df %>% get_chunk(1)
+flights_w_flight_date.lazy.df %>% get_chunk(1) %>% head()
 
 saveRDS(flights_w_flight_date.lazy.df, "added100.df.rds")
 
 rm(x)
 loaded_flights_w_flight_date.lazy.df = readRDS("added100.df.rds")
 
-loaded_flights_w_flight_date.lazy.df %>% get_chunk(1)
+loaded_flights_w_flight_date.lazy.df %>% get_chunk(1) %>% head()
 ```
 ## Summary
 
@@ -286,7 +294,8 @@ How to save a `lazy` `{disk.frame}` for and load it for re-use
 
 Want to leave 20 mins for Q&A.
 
-If we still have time we go through, 
+If we still have time we go through
+
 * [data.table syntax](https://diskframe.com/articles/05-data-table-syntax.html)
 * [running logistic regression using `{disk.frame}`](https://diskframe.com/articles/07-glm.html)
 * [some convenience features ](https://diskframe.com/articles/09-convenience-features.html)
