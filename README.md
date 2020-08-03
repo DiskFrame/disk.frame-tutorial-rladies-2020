@@ -2,6 +2,11 @@
 
 This is the [`{disk.frame}`](https://diskframe.com) tutorial repo for RLadies San Diego 2020. The tutorial was meant to be given at useR! 2020 St Louis, but had to be cancelled due to the COVID19 situation.
 
+## What is `{disk.frame}`?
+
+It is an R package for manipulating larger-than-RAM data. To learn more, please visit https://diskframe.com
+
+
 # Resources
 
 * [diskframe.com website](https://diskframe.com)
